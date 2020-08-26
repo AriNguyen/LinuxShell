@@ -15,7 +15,10 @@ Implementation of LINUX Shell in C: a program that runs in an infinite loop in w
 - Handling user interrupt signal (SIGINT)
 - Handling User flag
 - Displaying (CWD) to the shell
-- 
+- Name globbing
+- Control Flow
+- Handling environment variables
+- History
 
 ## Compiling
 ```shell
