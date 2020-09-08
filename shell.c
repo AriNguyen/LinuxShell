@@ -13,6 +13,7 @@ int backgrndFlag;
 int isAppend;
 int isContinue;
 
+void prompt();
 void runCommand(char *[], char*, char*, int*, int *);
 void tokenizeBySymbol(char *, char *[], char *, int *);
 
@@ -24,8 +25,8 @@ int main(int argc, char *argv[]) {
     int oldPipe[2], newPipe[2];
     
     char buf[BUFSIZE], *cmd;
-    char *sequenceList[512], *tokens[TOKENSIZE], *tokensPipe[TOKENSIZE], char *cmdTokens[TOKENSIZE];
-    char *inFile, *outFile;
+    char *sequenceList[512], *tokens[TOKENSIZE], *tokensPipe[TOKENSIZE], *cmdTokens[TOKENSIZE];
+    char *inFile, *outFile, *symbol;;
 
     pid_t chPid;
 
@@ -34,12 +35,8 @@ int main(int argc, char *argv[]) {
         backgrndFlag = 1;
         isContinue = 1;
 
-        // prompt & get input from stdin 
-        write(1, "$ ", 2);
-        if (fgets(buf, BUFSIZE, stdin) == NULL) {
-            perror("fget");
-            exit(1);
-        }
+        // prompt new line with CWD
+        prompt(buf);
 		if (!(strcmp(buf, "\n") && strcmp(buf, "")))
 			continue;
         if (!(strncmp(buf, "exit", 4) && strncmp(buf, "quit", 4))) {
@@ -49,27 +46,28 @@ int main(int argc, char *argv[]) {
 		}
 
         // tokenize to sequences
+        tokenizeBySymbol(buf, sequenceList, "\n", &sequenceSize);
         if (strchr(buf, ';') != NULL)
-            tokenizeBySymbol(buf, sequenceList, ";", &sequenceSize);
+            symbol = ";";
         else if (strstr(buf, "&&") != NULL) {
-            tokenizeBySymbol(buf, sequenceList, "&&", &sequenceSize);
+            symbol = "&&";
         } else if (strchr(buf, '&') != NULL) {
+            symbol = "&&";
             backgrndFlag = 0;
-            tokenizeBySymbol(buf, sequenceList, "&", &sequenceSize);
-        } else 
-            tokenizeBySymbol(buf, sequenceList, "\n", &sequenceSize);
+        }
+        tokenizeBySymbol(buf, sequenceList, symbol, &sequenceSize);
 
         // execute each sequence
         for (i = 0; i < sequenceSize; i++) {
             cmd = sequenceList[i];
+            printf("cmd: %s\n", cmd);
             
             chPid = fork();
             if (chPid < 0) {
                 perror("fork");
                 exit(2);
             }
-            if (chPid == 0) {
-                // child process
+            if (chPid == 0) { // child process
                 inFile = NULL;
                 outFile = NULL;
                 oldPipe[0] = -1;
@@ -96,16 +94,16 @@ int main(int argc, char *argv[]) {
                         oldPipe[1] = newPipe[1];
                     }
                 } else if (strchr(cmd, '<') != NULL) { 
-                    tokenizeBySymbol(cmd, cmdTokens, "<", &cmdSize);
+                    tokenizeBySymbol(cmd, cmdTokens, " < ", &cmdSize);
                     inFile = cmdTokens[1];
                     cmdTokens[1] = "\0";
                 } else if (strstr(cmd, ">>") != NULL) { 
                     isAppend = 1;
-                    tokenizeBySymbol(cmd, cmdTokens, ">>", &cmdSize);
+                    tokenizeBySymbol(cmd, cmdTokens, " >> ", &cmdSize);
                     outFile = cmdTokens[1];
                     cmdTokens[1] = "\0";
                 } else if (strchr(cmd, '>') != NULL) { 
-                    tokenizeBySymbol(cmd, cmdTokens, ">", &cmdSize);
+                    tokenizeBySymbol(cmd, cmdTokens, " > ", &cmdSize);
                     outFile = cmdTokens[1];
                     cmdTokens[1] = "\0";
                 } 
@@ -113,8 +111,7 @@ int main(int argc, char *argv[]) {
                 tokenizeBySymbol(cmd, cmdTokens, " \t\n", &cmdSize);
                 if (oldPipe[0] < 0)
                     runCommand(cmdTokens, inFile, outFile, oldPipe, newPipe);
-            } else { 
-                // parent process
+            } else {  // parent process
                 if (newPipe[0] > 1) {
                     close(newPipe[0]);
                     close(newPipe[1]);
@@ -129,6 +126,15 @@ int main(int argc, char *argv[]) {
         }
     }
     exit(0);
+}
+
+void prompt(char *buf) {
+    // prompt & get input from stdin 
+    write(1, "$ ", 2);
+    if (fgets(buf, BUFSIZE, stdin) == NULL) {
+        perror("fget");
+        exit(1);
+    }
 }
 
 void runCommand(char *tokens[], char *inFile, char *outFile, int* oldPipe, int* newPipe) {
