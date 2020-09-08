@@ -6,16 +6,16 @@
 #include <sys/types.h> 
 #include <sys/wait.h> 
 
+#define SEQUENCE_SIZE 512
 #define TOKENSIZE 32
 #define BUFSIZE 128
 
 int backgrndFlag;
-int isAppend;
-int isContinue;
+int isAppend, isContinue;
 
-void prompt();
-void runCommand(char *[], char*, char*, int*, int *);
-void tokenizeBySymbol(char *, char *[], char *, int *);
+void prompt(char*);
+void runCommand(char *[], char*, char*, int*, int*);
+void tokenizeBySymbol(char*, char *[], char*, int*);
 
 
 int main(int argc, char *argv[]) {
@@ -23,12 +23,11 @@ int main(int argc, char *argv[]) {
     int status, flag;
     int sequenceSize, cmdSize;
     int oldPipe[2], newPipe[2];
+    pid_t chPid;
     
     char buf[BUFSIZE], *cmd;
-    char *sequenceList[512], *tokens[TOKENSIZE], *tokensPipe[TOKENSIZE], *cmdTokens[TOKENSIZE];
+    char *sequenceList[SEQUENCE_SIZE], *tokens[TOKENSIZE], *tokensPipe[TOKENSIZE], *cmdTokens[TOKENSIZE];
     char *inFile, *outFile, *symbol;;
-
-    pid_t chPid;
 
     while (1) {
         flag = 0; 
@@ -46,7 +45,7 @@ int main(int argc, char *argv[]) {
 		}
 
         // tokenize to sequences
-        tokenizeBySymbol(buf, sequenceList, "\n", &sequenceSize);
+        tokenizeBySymbol(buf, sequenceList, "\n", NULL);
         if (strchr(buf, ';') != NULL)
             symbol = ";";
         else if (strstr(buf, "&&") != NULL) {
@@ -60,8 +59,6 @@ int main(int argc, char *argv[]) {
         // execute each sequence
         for (i = 0; i < sequenceSize; i++) {
             cmd = sequenceList[i];
-            printf("cmd: %s\n", cmd);
-            
             chPid = fork();
             if (chPid < 0) {
                 perror("fork");
@@ -79,8 +76,7 @@ int main(int argc, char *argv[]) {
                 if (strchr(cmd, '|') != NULL) { 
                     tokenizeBySymbol(cmd, tokensPipe, "|" , &cmdSize);
                     for (j = 0; j < cmdSize; j++) {
-                        int size;
-                        tokenizeBySymbol(tokensPipe[j], cmdTokens, " \n" , &size);
+                        tokenizeBySymbol(tokensPipe[j], cmdTokens, " \n" , NULL);
                         pipe(newPipe);
                         if (j == 0) { // first
                             oldPipe[0] = 1;
@@ -93,22 +89,24 @@ int main(int argc, char *argv[]) {
                         oldPipe[0] = newPipe[0];
                         oldPipe[1] = newPipe[1];
                     }
+                } else if (strchr(cmd, '<') != NULL && strchr(cmd, '>') != NULL) {
+                    
                 } else if (strchr(cmd, '<') != NULL) { 
-                    tokenizeBySymbol(cmd, cmdTokens, " < ", &cmdSize);
+                    tokenizeBySymbol(cmd, cmdTokens, " < ", NULL);
                     inFile = cmdTokens[1];
                     cmdTokens[1] = "\0";
                 } else if (strstr(cmd, ">>") != NULL) { 
                     isAppend = 1;
-                    tokenizeBySymbol(cmd, cmdTokens, " >> ", &cmdSize);
+                    tokenizeBySymbol(cmd, cmdTokens, " >> ", NULL);
                     outFile = cmdTokens[1];
                     cmdTokens[1] = "\0";
                 } else if (strchr(cmd, '>') != NULL) { 
-                    tokenizeBySymbol(cmd, cmdTokens, " > ", &cmdSize);
+                    tokenizeBySymbol(cmd, cmdTokens, " > ", NULL);
                     outFile = cmdTokens[1];
                     cmdTokens[1] = "\0";
                 } 
                 
-                tokenizeBySymbol(cmd, cmdTokens, " \t\n", &cmdSize);
+                tokenizeBySymbol(cmd, cmdTokens, " \t\n", NULL);
                 if (oldPipe[0] < 0)
                     runCommand(cmdTokens, inFile, outFile, oldPipe, newPipe);
             } else {  // parent process
@@ -124,13 +122,20 @@ int main(int argc, char *argv[]) {
             printf("\nClosing Shell...\n");
             break;
         }
+        write(STDIN_FILENO, "\n", 1);
     }
     exit(0);
 }
 
 void prompt(char *buf) {
-    // prompt & get input from stdin 
-    write(1, "$ ", 2);
+    long size;
+    char *buff, *ptr;
+
+    size = pathconf(".", _PC_PATH_MAX);
+    if ((buff = (char *)malloc((size_t)size)) != NULL)
+        ptr = getcwd(buff, (size_t)size);
+    write(STDIN_FILENO, ptr, size);
+    write(STDIN_FILENO, "\n$ ", 3);
     if (fgets(buf, BUFSIZE, stdin) == NULL) {
         perror("fget");
         exit(1);
@@ -199,5 +204,6 @@ void tokenizeBySymbol(char *buf, char *cmdExec[], char *symbol, int *sequenceSiz
     while ((cmdExec[i] = strtok(NULL, symbol)) != NULL)
         i++;
     cmdExec[i] = NULL;
-    *sequenceSize = i;
+    if (sequenceSize)
+        *sequenceSize = i;
 }
