@@ -38,7 +38,7 @@ FUNCTION main
             commands = Parse seq by pipe (|)
             FOR cmd in commands
                 handle IO redirection (<), (>), (>>)
-                call: exec command (arg: cmd)
+                call: exec command 
             ENDFOR
         ENDFOR
     ENDWHILE
