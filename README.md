@@ -86,26 +86,28 @@ ENDFUNCTION
 
 ## Test case 
 ```shell
-cd tests
+cd test
 pwd
+ls ; pwd ; cd .. ; pwd
+ls ; cat ; wc
 echo foobar
 echo 1 2 3 4 5
-./delayedfoo
-./delayedfoo &
-./delayedfoo ; echo bar
-./delayedfoo & echo bar
+./test/out
+./test/out &
+./test/out ; echo bar
+./test/out & echo bar
 ls -l | wc -l
-./catstdin < foo
+./test/out < shell.c
 echo bar > bar
 echo foobar >> bar
 ./test/out < foo > baz
-./delayedfoo & ./delayedfoo & echo bar
+./test/out & ./test/out & echo bar
 echo 1 ; echo 2 ; echo 3
 ./test/out < foo ; echo hello > world ; echo goodbye >> world
 ./test/out < foo | head -n1
 ./test/out < foo | tail -n1 > baz
 ./test/out < foo | tail -n1 > baz ; cat baz
-cat foo | head -n2 | tail -n1
+cat shell.c | head -n2 | tail -n1
 ```
 
 ## References
